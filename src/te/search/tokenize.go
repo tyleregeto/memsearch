@@ -15,8 +15,10 @@ type SimpleTokenizer struct {
 }
 
 func (t *SimpleTokenizer) Tokenize(text string) []Token {
+	text = stripHtml(text)
 	list := strings.Fields(text)
 	list = cleanPunctuation(list)
+
 	tokens := []Token{}
 	stemmer := stemmers.PorterStemmerEnglish{}
 	seen := map[string]bool{}
