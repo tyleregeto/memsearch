@@ -1,0 +1,5 @@
+#!/bin/bash
+# Startup the application with a no hangup command, specify log files.
+
+sudo killall memsearch
+sudo nohup ./build/memsearch > log.out 2> log.err < /dev/null &

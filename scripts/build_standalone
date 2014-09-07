@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Builds a standalone HTTP search server. See main.go for implementation
+
+mkdir -p build
+
+# build go app
+# set the GO_PATH var to be the cwd
+export GOPATH=$(pwd)
+
+go clean
+
+# build
+go build -o build/memsearch src/main.go
