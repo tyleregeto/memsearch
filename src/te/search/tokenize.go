@@ -51,6 +51,43 @@ func (t *SimpleTokenizer) Tokenize(text string) []Token {
 	return tokens
 }
 
+func (t *SimpleTokenizer) TokenizeForKindex(text string) []Token {
+	text = stripHtml(text)
+	list := strings.Fields(text)
+	list = cleanPunctuation(list)
+
+	tokens := []Token{}
+	stemmer := stemmers.PorterStemmerEnglish{}
+	seen := map[string]bool{}
+
+	for _, v := range list {
+		// lower case all tokens
+		v = strings.ToLower(v)
+
+		if v == "" {
+			continue
+		}
+
+		// remove stop words
+		if isStopWord(v) {
+			continue
+		}
+
+		// apply stemming
+		v = stemmer.Stem(v)
+
+		// ignore duplicates, add to reuslts if unique
+		_, ok := seen[v]
+		if !ok {
+			seen[v] = true
+			// add token to list
+			tokens = append(tokens, Token(v))
+		}
+	}
+
+	return tokens
+}
+
 func uniqueTokenMap(list []Token) map[Token]bool {
 	m := map[Token]bool{}
 	for _, t := range list {

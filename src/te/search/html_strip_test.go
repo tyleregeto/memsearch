@@ -33,3 +33,25 @@ func TestHtmlStrip(t *testing.T) {
 		t.Errorf("expected: %v\ngot: %v", e, r)
 	}
 }
+
+func TestHtmlStripMath(t *testing.T) {
+	var s string
+	var e string
+	var r string
+
+	s = "<p>cat = 2 < 4</p>"
+	e = "cat = 2 < 4"
+	r = stripHtml(s)
+
+	if stripHtml(s) != e {
+		t.Errorf("expected: %v\ngot: %v", e, r)
+	}
+
+	s = "<p>cat = 2 < 4</p><"
+	e = "cat = 2 < 4<"
+	r = stripHtml(s)
+
+	if stripHtml(s) != e {
+		t.Errorf("expected: %v\ngot: %v", e, r)
+	}
+}

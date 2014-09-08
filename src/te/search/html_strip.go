@@ -2,20 +2,30 @@ package search
 
 import (
 	"html"
+	"unicode"
 )
 
 func stripHtml(val string) string {
-	res := make([]rune, len(val))
+	length := len(val)
+	res := make([]rune, length)
 	n := 0
 	inTag := false
 
-	// TODO remove all start tags, replace with a single empty space
-	// TODO remove all end tags, replace with a single empty space
-	// TODO remove attributes
-	for _, r := range val {
-		// if we are not in a tag, and this rune does not open one,
-		// add the run and continue
-		if !inTag && r != '<' {
+	for i, r := range val {
+		// if we are not in a tag, and this opens one, replace the tag with an
+		// empty space, mark tag open, and continue
+		if !inTag && r == '<' && i+1 < length {
+			// the rune following it must be a letter (a-z) or the start of
+			// a closing tag
+			next := rune(val[i+1])
+			if next == '/' || unicode.IsLetter(next) {
+				inTag = true
+				continue
+			}
+		}
+
+		// if we are not in a tag, add the rune and continue
+		if !inTag {
 			res[n] = r
 			n++
 			continue
@@ -26,14 +36,6 @@ func stripHtml(val string) string {
 			inTag = false
 			continue
 		}
-
-		// if we are not in a tag, and this opens one, replace the tag with an
-		// empty space, mark tag open, and continue
-		if r == '<' {
-			inTag = true
-			continue
-		}
-
 	}
 
 	s := string(res[0:n])

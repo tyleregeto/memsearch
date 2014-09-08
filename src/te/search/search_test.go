@@ -247,3 +247,37 @@ func TestPartialMatching(t *testing.T) {
 		t.Errorf("Search failed, expected 2 matches, got: %v", res)
 	}
 }
+
+func TestPartialMatchingAfterStemming(t *testing.T) {
+	t.Skip()
+
+	s := NewSearchEngine()
+	s.SupportWildCardQuries = true
+
+	s.Index(Document{Id: "1", Fields: map[string]*Field{
+		"title": &Field{Value: "tomb program? programming, progress!"},
+	},
+	})
+
+	res := s.Query(Query{Terms: "to", PartialMatch: true})
+	if res.Hits == 0 {
+		t.Errorf("Search failed, expected matches")
+	}
+}
+
+func TestPartialMatchingFromStopWord(t *testing.T) {
+	t.Skip()
+
+	s := NewSearchEngine()
+	s.SupportWildCardQuries = true
+
+	s.Index(Document{Id: "1", Fields: map[string]*Field{
+		"title": &Field{Value: "program? programming, progress!"},
+	},
+	})
+
+	res := s.Query(Query{Terms: "programmin", PartialMatch: true})
+	if res.Hits == 0 {
+		t.Errorf("Search failed, expected matches")
+	}
+}
