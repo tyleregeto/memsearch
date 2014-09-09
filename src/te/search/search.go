@@ -125,57 +125,10 @@ func (s *SearchEngine) SetPersistent(persistent bool, savePath string) {
 	s.savePath = savePath
 
 	if persistent {
+		// make sure pathh exists
 		os.MkdirAll(savePath, 0770)
-
-		// attempt to load data, it may not exist
-		bytes, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", savePath, indexFileName))
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		var savedIndex engineJsonExport
-
-		err = json.Unmarshal(bytes, &savedIndex)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		// load docs
-		// TODO probably don't want to load these all the time (unless we are targeting
-		// fairly small datasets) We should load on demand as needed. First we need to
-		// have better in-memory indexing
-		files, err := ioutil.ReadDir(s.savePath)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		for _, f := range files {
-			if f.Name() == indexFileName {
-				continue
-			}
-
-			bytes, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", savePath, f.Name()))
-			if err != nil {
-				continue
-			}
-
-			var d Document
-			err = json.Unmarshal(bytes, &d)
-			if err != nil {
-				continue
-			}
-
-			s.documents[d.Uid] = d
-		}
-
-		// once all docs and the index are loaded, restore state
-		s.externalToInternalId = savedIndex.ExternalToInternalId
-		s.index.nextIndex = savedIndex.NextIndex
-		s.index.table = savedIndex.Index
-		s.kIndex.table = savedIndex.KIndex
+		// load any previous data
+		s.readIndexFromDisk()
 	}
 }
 
@@ -205,9 +158,10 @@ func (s *SearchEngine) Index(doc Document) {
 
 	// all tokens in the document
 	tokens := []Token{}
+	uniqueTokens := map[Token]bool{}
 
 	for key, f := range doc.Fields {
-		fieldTokens := s.Tokenizer.Tokenize(f.Value)
+		fieldTokens := s.Tokenizer.Tokenize(f.Value, false)
 		if exists {
 			// the field could be new to the document
 			oldDocField, ok := prevVersion.Fields[key]
@@ -221,6 +175,7 @@ func (s *SearchEngine) Index(doc Document) {
 			for _, t := range removed {
 				s.index.Remove(t, uid)
 			}
+
 			tokens = append(tokens, added...)
 		} else {
 			tokens = append(tokens, fieldTokens...)
@@ -232,7 +187,11 @@ func (s *SearchEngine) Index(doc Document) {
 
 	// index the document under all tokens
 	for _, t := range tokens {
-		s.index.Add(t, doc.Uid)
+		_, seen := uniqueTokens[t]
+		if !seen {
+			uniqueTokens[t] = true
+			s.index.Add(t, doc.Uid)
+		}
 
 		if s.SupportWildCardQuries {
 			s.kIndex.Add(string(t))
@@ -275,7 +234,8 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 		query.PageSize = DefaultPageSize
 	}
 
-	tokens := s.Tokenizer.Tokenize(query.Terms)
+	// If its not a partial match query, remove stop words
+	tokens := s.Tokenizer.Tokenize(query.Terms, !query.PartialMatch)
 	docs := s._all(tokens, query.PartialMatch)
 
 	// lookup documents
@@ -324,7 +284,7 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 }
 
 func (s *SearchEngine) QueryField(field string, query string) SearchResult {
-	tokens := s.Tokenizer.Tokenize(query)
+	tokens := s.Tokenizer.Tokenize(query, false)
 	docs := s._all(tokens, false)
 
 	// lookup documents, filter to only include matching fields
@@ -407,4 +367,55 @@ func (s *SearchEngine) writeIndexToDisk() {
 
 	// TODO rather than writing the whole thing everytime, we should use some type of
 	// update system
+}
+
+func (s *SearchEngine) readIndexFromDisk() {
+	bytes, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", s.savePath, indexFileName))
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	var savedIndex engineJsonExport
+
+	err = json.Unmarshal(bytes, &savedIndex)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	// load docs
+	// TODO probably don't want to load these all the time (unless we are targeting
+	// fairly small datasets) We should load on demand as needed. First we need to
+	// have better in-memory indexing
+	files, err := ioutil.ReadDir(s.savePath)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	for _, f := range files {
+		if f.Name() == indexFileName {
+			continue
+		}
+
+		bytes, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", s.savePath, f.Name()))
+		if err != nil {
+			continue
+		}
+
+		var d Document
+		err = json.Unmarshal(bytes, &d)
+		if err != nil {
+			continue
+		}
+
+		s.documents[d.Uid] = d
+	}
+
+	// once all docs and the index are loaded, restore state
+	s.externalToInternalId = savedIndex.ExternalToInternalId
+	s.index.nextIndex = savedIndex.NextIndex
+	s.index.table = savedIndex.Index
+	s.kIndex.table = savedIndex.KIndex
 }

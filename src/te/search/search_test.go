@@ -203,7 +203,7 @@ func TestDuplicateIndexValues(t *testing.T) {
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
 		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
-		"xyz":   &Field{Value: ""},
+		"xyz":   &Field{Value: "Planes, trains, automobiles!, O'Niel"},
 	},
 	})
 
@@ -219,7 +219,7 @@ func TestDuplicateIndexValues(t *testing.T) {
 	},
 	})
 
-	if len(s.index.table["dog"]) != 1 {
+	if len(s.index.table["plane"]) != 1 {
 		t.Errorf("Item indexed more than once")
 	}
 }
@@ -248,9 +248,7 @@ func TestPartialMatching(t *testing.T) {
 	}
 }
 
-func TestPartialMatchingAfterStemming(t *testing.T) {
-	t.Skip()
-
+func TestPartialMatchingFromStopWord(t *testing.T) {
 	s := NewSearchEngine()
 	s.SupportWildCardQuries = true
 
@@ -265,7 +263,7 @@ func TestPartialMatchingAfterStemming(t *testing.T) {
 	}
 }
 
-func TestPartialMatchingFromStopWord(t *testing.T) {
+func TestPartialMatchingAfterStemming(t *testing.T) {
 	t.Skip()
 
 	s := NewSearchEngine()
