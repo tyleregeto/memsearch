@@ -4,7 +4,6 @@ Overview:
 A full text, in-memory, search engine.
 
 Cons
-- slow (compared to Lucene)
 - not distributed
 - not good for realy large data sets
 - tokenization optimized for English only
