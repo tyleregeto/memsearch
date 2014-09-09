@@ -22,10 +22,8 @@ type (
 		// name is used for saving
 		savePath   string
 		persistent bool
-		// Create a new tokenizer each time but it still needs to be customizable
-		Tokenizer Tokenizer
-		index     IndexTable
-		kIndex    KGramIndexTable
+		index      IndexTable
+		kIndex     KGramIndexTable
 		// docid to doc
 		documents            map[int]Document
 		externalToInternalId map[string]int
@@ -99,7 +97,6 @@ func NewDocument() Document {
 
 func NewSearchEngine() *SearchEngine {
 	s := &SearchEngine{}
-	s.Tokenizer = &SimpleTokenizer{}
 	s.index = NewIndexTable()
 	s.kIndex = NewKGramIndexTable()
 	s.documents = map[int]Document{}
@@ -132,100 +129,6 @@ func (s *SearchEngine) SetPersistent(persistent bool, savePath string) {
 	}
 }
 
-// Index adds a document to the index based on the `terms`.
-// If `docid` already exists in the index, it is updated.
-// `data` is the value returned when searching.
-func (s *SearchEngine) Index(doc Document) {
-	// get/set the documentes internal id
-	uid, exists := s.externalToInternalId[doc.Id]
-	if !exists {
-		uid = s.index.NextIndex()
-		doc.Uid = uid
-		doc.DateAdded = time.Now()
-		s.externalToInternalId[doc.Id] = uid
-	}
-
-	doc.Uid = uid
-	doc.DateUpdated = time.Now()
-
-	var prevVersion Document
-	if exists {
-		prevVersion = s.documents[doc.Uid]
-	}
-
-	// save the document for later retrieval
-	s.documents[uid] = doc
-
-	// all tokens in the document
-	tokens := []Token{}
-	uniqueTokens := map[Token]bool{}
-
-	for key, f := range doc.Fields {
-		fieldTokens := s.Tokenizer.Tokenize(f.Value, false)
-		if exists {
-			// the field could be new to the document
-			oldDocField, ok := prevVersion.Fields[key]
-			if !ok {
-				oldDocField = &Field{}
-			}
-
-			added, removed := sortNewAndOldTokens(fieldTokens, oldDocField.Tokens)
-
-			// remove indexing for tokens that no longer appear in the document
-			for _, t := range removed {
-				s.index.Remove(t, uid)
-			}
-
-			tokens = append(tokens, added...)
-		} else {
-			tokens = append(tokens, fieldTokens...)
-		}
-
-		// Store tokens on each field for further indexing
-		f.Tokens = uniqueTokenMap(fieldTokens)
-	}
-
-	// index the document under all tokens
-	for _, t := range tokens {
-		_, seen := uniqueTokens[t]
-		if !seen {
-			uniqueTokens[t] = true
-			s.index.Add(t, doc.Uid)
-		}
-
-		if s.SupportWildCardQuries {
-			s.kIndex.Add(string(t))
-		}
-	}
-
-	// write the document to disk
-	if s.persistent {
-		docJson, err := json.Marshal(doc)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to save indexed file to disk, err: %v", err.Error()))
-		}
-		ioutil.WriteFile(fmt.Sprintf("%v/%v", s.savePath, uid), docJson, 0770)
-	}
-
-	// write the updated index to disk
-	s.writeIndexToDisk()
-}
-
-// Remove purges the given document from the index
-func (s *SearchEngine) Remove(docid string) {
-	uid, ok := s.externalToInternalId[docid]
-	if ok {
-		d := s.documents[uid]
-		// remove the document from all tokens
-		for _, f := range d.Fields {
-			for t, _ := range f.Tokens {
-				s.index.Remove(t, uid)
-			}
-		}
-		delete(s.documents, uid)
-	}
-}
-
 func (s *SearchEngine) Query(query Query) SearchResult {
 	if query.Page < 1 {
 		query.Page = 1
@@ -234,8 +137,10 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 		query.PageSize = DefaultPageSize
 	}
 
+	tokenizer := NewSimpleTokenizer()
+
 	// If its not a partial match query, remove stop words
-	tokens := s.Tokenizer.Tokenize(query.Terms, !query.PartialMatch)
+	tokens := tokenizer.Tokenize(query.Terms, !query.PartialMatch)
 	docs := s._all(tokens, query.PartialMatch)
 
 	// lookup documents
@@ -284,7 +189,8 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 }
 
 func (s *SearchEngine) QueryField(field string, query string) SearchResult {
-	tokens := s.Tokenizer.Tokenize(query, false)
+	tokenizer := NewSimpleTokenizer()
+	tokens := tokenizer.Tokenize(query, false)
 	docs := s._all(tokens, false)
 
 	// lookup documents, filter to only include matching fields
@@ -321,6 +227,125 @@ func (s *SearchEngine) QueryField(field string, query string) SearchResult {
 	return results
 }
 
+// Remove purges the given document from the index
+func (s *SearchEngine) Remove(docid string) {
+	uid, ok := s.externalToInternalId[docid]
+	if ok {
+		d := s.documents[uid]
+		// remove the document from all tokens
+		for _, f := range d.Fields {
+			for t, _ := range f.Tokens {
+				s.index.Remove(t, uid)
+			}
+		}
+		delete(s.documents, uid)
+	}
+}
+
+// Index adds a document to the index based on the `terms`.
+// If `docid` already exists in the index, it is updated.
+// `data` is the value returned when searching.
+func (s *SearchEngine) Index(doc Document) {
+	// get/set the documentes internal id
+	uid, exists := s.externalToInternalId[doc.Id]
+	if !exists {
+		uid = s.index.NextIndex()
+		doc.Uid = uid
+		doc.DateAdded = time.Now()
+		s.externalToInternalId[doc.Id] = uid
+	}
+
+	doc.Uid = uid
+	doc.DateUpdated = time.Now()
+
+	// add to the inverse index
+	s.addToInverseIndex(doc, !exists)
+
+	// add the document to the kgram index. This one is
+	// opt in because it results in a large memory increase
+	if s.SupportWildCardQuries {
+		s.addToKgramIndex(doc)
+	}
+
+	// save the document for later retrieval
+	s.documents[uid] = doc
+
+	// write the document to disk
+	if s.persistent {
+		docJson, err := json.Marshal(doc)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to save indexed file to disk, err: %v", err.Error()))
+		}
+		ioutil.WriteFile(fmt.Sprintf("%v/%v", s.savePath, uid), docJson, 0770)
+	}
+
+	// write the updated index to disk
+	s.writeIndexToDisk()
+}
+
+func (s *SearchEngine) addToInverseIndex(doc Document, isNew bool) {
+	// all tokens in the document
+	tokens := []Token{}
+	uniqueTokens := map[Token]bool{}
+	tokenizer := NewSimpleTokenizer()
+
+	// TODO this should be more efficient. Here we remove all tokens just
+	// to re add them in the next step. We should calculate all the
+	// added/removed ones and only update those.
+	// This was implemented (but had bugs) so we've gone with the simple approach
+	// for now, speed has been affected.
+
+	var prevVersion Document
+	if !isNew {
+		prevVersion = s.documents[doc.Uid]
+
+		for _, f := range prevVersion.Fields {
+			for k := range f.Tokens {
+				s.index.Remove(k, doc.Uid)
+			}
+		}
+	}
+
+	for _, f := range doc.Fields {
+		fieldTokens := tokenizer.Tokenize(f.Value, false)
+		tokens = append(tokens, fieldTokens...)
+		// Store tokens on each field for further indexing
+		f.Tokens = uniqueTokenMap(fieldTokens)
+	}
+
+	// index the document under all tokens
+	for _, t := range tokens {
+		_, seen := uniqueTokens[t]
+		if !seen {
+			uniqueTokens[t] = true
+			s.index.Add(t, doc.Uid)
+		}
+	}
+}
+
+func (s *SearchEngine) addToKgramIndex(doc Document) {
+	tokenizer := NewSimpleTokenizer()
+	words := []string{}
+
+	// combine all the words into one big list
+	for _, f := range doc.Fields {
+		words = append(words, tokenizer.CleanAndSplit(f.Value)...)
+	}
+
+	// add each word to the kgram index, passing in the tokenized value of each.
+	// We index under the original word and the stemmed word, but we always reference
+	// back to the tokenized value
+	for _, w := range words {
+		if tokenizer.IsStopWord(w) {
+			continue
+		}
+
+		t := tokenizer.Stem(w)
+		s.kIndex.Add(t, t)
+		s.kIndex.Add(w, t)
+	}
+}
+
 // returns a list of docids
 func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []int {
 	docs := []int{}
@@ -332,6 +357,7 @@ func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []int {
 		// If no results found on the exact term, and partial matching is enabled
 		// perform the partial matching
 		if partialMatches && len(r) == 0 {
+			// TODO we should include partial matches here anyways, by weight them differently
 			r = s._all(s.kIndex.Get(t), false)
 		}
 

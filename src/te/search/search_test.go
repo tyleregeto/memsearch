@@ -188,11 +188,22 @@ func TestPersistenace(t *testing.T) {
 	},
 	})
 
+	s.Index(Document{Id: "1", Fields: map[string]*Field{
+		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
+		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
+		"xyz":   &Field{Value: ""},
+	},
+	})
+
 	// replace the search engine with a new instance, then test for the document
 	// that was indexed on the previous engine
 	s = NewPersistentSearchEngine(testDataDir)
-	if s.Query(Query{Terms: "bear"}).Hits != 1 {
+	if s.Query(Query{Terms: "bear"}).Hits == 0 {
 		t.Errorf("Search failed to restore index")
+	}
+
+	if len(s.index.table["automobil"]) != 1 {
+		t.Errorf("Item indexed more than once")
 	}
 }
 
@@ -200,10 +211,9 @@ func TestPersistenace(t *testing.T) {
 // This was happening at one point, this tests ensures it doesn't regress
 func TestDuplicateIndexValues(t *testing.T) {
 	s := NewSearchEngine()
-	s.Index(Document{Id: "1", Fields: map[string]*Field{
+	s.Index(Document{Id: "55", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
 		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
-		"xyz":   &Field{Value: "Planes, trains, automobiles!, O'Niel"},
 	},
 	})
 
@@ -211,11 +221,10 @@ func TestDuplicateIndexValues(t *testing.T) {
 		t.Errorf("Item indexed more than once")
 	}
 
-	s.Index(Document{Id: "1", Fields: map[string]*Field{
+	s.Index(Document{Id: "55", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
 		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
-		"desc":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
-		"xyz":   &Field{Value: ""},
+		"xyz":   &Field{Value: "Planes, trains, automobiles!, O'Niel"},
 	},
 	})
 
@@ -264,9 +273,7 @@ func TestPartialMatchingFromStopWord(t *testing.T) {
 }
 
 func TestPartialMatchingAfterStemming(t *testing.T) {
-	t.Skip()
-
-	s := NewSearchEngine()
+	s := NewPersistentSearchEngine(testDataDir)
 	s.SupportWildCardQuries = true
 
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
@@ -279,3 +286,8 @@ func TestPartialMatchingAfterStemming(t *testing.T) {
 		t.Errorf("Search failed, expected matches")
 	}
 }
+
+// new test case index a document
+// then index the same document minus a field
+// then index the same document with that field added in again
+// you now have a duplicate entry
