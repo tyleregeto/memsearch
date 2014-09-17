@@ -6,7 +6,23 @@ http://www.elasticsearch.org/guide/en/elasticsearch/guide/current/index.html
 http://en.wikipedia.org/wiki/Inverted_index  
 
 Issues:
-https://github.com/tyleregeto/memsearch/issues
+- relevance sorting (ticket exists)
+- insertIntoInverseIndex is slow, doing excessive work
+- create isuue for index compression, its too big
+- alpha sort kgram index table rows, improve insert time
+- field quries have kind of fallen by the way side, need to update and support partial matches aand http quries
+
+
+New field->term index
+
+fieldToId[fieldname] = uid
+
+inverseIndex[token] = {
+	docs = [0,1,2,3,6,8]
+	// a map of each document to each field. Fields are a int array, where the index matches the fieldid
+	// value is the occurance count for the token. First value might be a the sum of all fields
+	docToField[docid] = [6, 0,4,1,1,0]
+}
 
 
 Tasks:

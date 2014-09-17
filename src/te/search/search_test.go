@@ -199,11 +199,12 @@ func TestPersistenace(t *testing.T) {
 	// that was indexed on the previous engine
 	s = NewPersistentSearchEngine(testDataDir)
 	if s.Query(Query{Terms: "bear"}).Hits == 0 {
-		t.Errorf("Search failed to restore index")
+		t.Errorf("Search failed to restore index.")
 	}
 
-	if len(s.index.table["automobil"]) != 1 {
-		t.Errorf("Item indexed more than once")
+	list := s.index.Get(Token("automobil"))
+	if len(list) != 1 {
+		t.Errorf("Search failed to restore index, res was: %v", list)
 	}
 }
 
@@ -217,18 +218,29 @@ func TestDuplicateIndexValues(t *testing.T) {
 	},
 	})
 
-	if len(s.index.table["dog"]) != 1 {
+	res := s.index.Get("plane")
+	if len(res) != 1 {
+		t.Errorf("Item indexed more than once")
+	}
+
+	s.Index(Document{Id: "55", Fields: map[string]*Field{
+		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
+	},
+	})
+
+	res = s.index.Get("plane")
+	if len(res) != 0 {
 		t.Errorf("Item indexed more than once")
 	}
 
 	s.Index(Document{Id: "55", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
 		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
-		"xyz":   &Field{Value: "Planes, trains, automobiles!, O'Niel"},
 	},
 	})
 
-	if len(s.index.table["plane"]) != 1 {
+	res = s.index.Get("plane")
+	if len(res) != 1 {
 		t.Errorf("Item indexed more than once")
 	}
 }
@@ -273,7 +285,7 @@ func TestPartialMatchingFromStopWord(t *testing.T) {
 }
 
 func TestPartialMatchingAfterStemming(t *testing.T) {
-	s := NewPersistentSearchEngine(testDataDir)
+	s := NewSearchEngine()
 	s.SupportWildCardQuries = true
 
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
@@ -286,8 +298,3 @@ func TestPartialMatchingAfterStemming(t *testing.T) {
 		t.Errorf("Search failed, expected matches")
 	}
 }
-
-// new test case index a document
-// then index the same document minus a field
-// then index the same document with that field added in again
-// you now have a duplicate entry

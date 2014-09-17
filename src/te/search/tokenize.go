@@ -60,6 +60,34 @@ func (t *SimpleTokenizer) Tokenize(text string, stripStopWords bool) []Token {
 	return tokens[0:n]
 }
 
+func (t *SimpleTokenizer) TokenizeWithPositions(text string, startPos int) (map[Token][]int, int) {
+	list := t.CleanAndSplit(text)
+	tokens := make(map[Token][]int, 0)
+	pos := startPos
+
+	for _, v := range list {
+		if v == "" {
+			continue
+		}
+
+		pos++
+
+		// apply stemming
+		tok := Token(t.Stem(v))
+
+		// ignore duplicates, add to reuslts if unique
+		positions, ok := tokens[tok]
+		if !ok {
+			positions = []int{pos}
+			tokens[tok] = positions
+		} else {
+			positions = append(positions, pos)
+		}
+	}
+
+	return tokens, pos
+}
+
 func (t *SimpleTokenizer) IsStopWord(word string) bool {
 	return isStopWord(word)
 }

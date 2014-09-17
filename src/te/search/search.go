@@ -55,8 +55,9 @@ type (
 	}
 
 	Field struct {
-		Value  string
-		Tokens map[Token]bool
+		Value string
+		// Tokens in the field, and a list of positions it is in
+		Tokens map[Token][]int
 	}
 
 	Query struct {
@@ -81,7 +82,7 @@ type (
 	// wrapper struct for exporting private fields to JSON
 	engineJsonExport struct {
 		ExternalToInternalId map[string]int
-		Index                map[Token][]int
+		Index                map[Token]IndexRow
 		KIndex               map[string][]string
 		NextIndex            int
 	}
@@ -258,6 +259,12 @@ func (s *SearchEngine) Index(doc Document) {
 	doc.Uid = uid
 	doc.DateUpdated = time.Now()
 
+	lastPos := 0
+	tokenizer := NewSimpleTokenizer()
+	for _, f := range doc.Fields {
+		f.Tokens, lastPos = tokenizer.TokenizeWithPositions(f.Value, lastPos)
+	}
+
 	// add to the inverse index
 	s.addToInverseIndex(doc, !exists)
 
@@ -285,9 +292,7 @@ func (s *SearchEngine) Index(doc Document) {
 
 func (s *SearchEngine) addToInverseIndex(doc Document, isNew bool) {
 	// all tokens in the document
-	tokens := []Token{}
-	uniqueTokens := map[Token]bool{}
-	tokenizer := NewSimpleTokenizer()
+	tokens := map[Token][]int{}
 
 	// TODO this should be more efficient. Here we remove all tokens just
 	// to re add them in the next step. We should calculate all the
@@ -306,20 +311,23 @@ func (s *SearchEngine) addToInverseIndex(doc Document, isNew bool) {
 		}
 	}
 
+	// combine the tkens from all the fields together
 	for _, f := range doc.Fields {
-		fieldTokens := tokenizer.Tokenize(f.Value, false)
-		tokens = append(tokens, fieldTokens...)
-		// Store tokens on each field for further indexing
-		f.Tokens = uniqueTokenMap(fieldTokens)
+		for t, positions := range f.Tokens {
+			posList, ok := tokens[t]
+			if !ok {
+				tokens[t] = positions
+			} else {
+				// TODO how do we track positions across the whole doc, when its broken up by fields?
+				// this data isnt very useful right now
+				posList = append(posList, positions...)
+			}
+		}
 	}
 
-	// index the document under all tokens
-	for _, t := range tokens {
-		_, seen := uniqueTokens[t]
-		if !seen {
-			uniqueTokens[t] = true
-			s.index.Add(t, doc.Uid)
-		}
+	// index the document under all unique tokens
+	for t, positions := range tokens {
+		s.index.Add(t, doc.Uid, positions)
 	}
 }
 
