@@ -321,21 +321,18 @@ func (s *SearchEngine) addToInverseIndex(doc Document, isNew bool) {
 		}
 	}
 
-	// combine the tkens from all the fields together
+	// combine the tokens from all the fields together
 	for _, f := range doc.Fields {
 		for t, positions := range f.Tokens {
 			posList, ok := tokens[t]
 			if !ok {
 				tokens[t] = positions
 			} else {
-				// TODO how do we track positions across the whole doc, when its broken up by fields?
-				// this data isnt very useful right now
-				posList = append(posList, positions...)
+				tokens[t] = append(posList, positions...)
 			}
 		}
 	}
 
-	// index the document under all unique tokens
 	for t, positions := range tokens {
 		s.index.Add(t, doc.Uid, positions)
 	}

@@ -183,14 +183,14 @@ func TestPersistenace(t *testing.T) {
 	s := NewPersistentSearchEngine(testDataDir)
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
-		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
+		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel Cat"},
 		"xyz":   &Field{Value: ""},
 	},
 	})
 
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
-		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel"},
+		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel cat cat"},
 		"xyz":   &Field{Value: ""},
 	},
 	})
