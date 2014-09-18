@@ -190,6 +190,13 @@ func TestPersistenace(t *testing.T) {
 
 	s.Index(Document{Id: "1", Fields: map[string]*Field{
 		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
+		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel cat cat bear bear"},
+		"xyz":   &Field{Value: ""},
+	},
+	})
+
+	s.Index(Document{Id: "2", Fields: map[string]*Field{
+		"title": &Field{Value: "Dogs? bears' Cat's turbo-snail"},
 		"body":  &Field{Value: "Planes, trains, automobiles!, O'Niel cat cat"},
 		"xyz":   &Field{Value: ""},
 	},

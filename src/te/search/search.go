@@ -473,7 +473,7 @@ func (s *hitSorter) Len() int {
 }
 
 func (s *hitSorter) Less(a int, b int) bool {
-	return s.hits[a].doc < s.hits[b].doc
+	return s.hits[a].freq > s.hits[b].freq
 }
 
 func (s *hitSorter) Swap(a int, b int) {

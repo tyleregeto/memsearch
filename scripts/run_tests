@@ -9,4 +9,4 @@ export GOPATH=$(pwd)
 go clean
 
 # build
-go test ./src/te/... # -v
+go test ./src/te/...  -v
