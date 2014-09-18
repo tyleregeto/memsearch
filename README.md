@@ -17,6 +17,6 @@ Pros
 - support for instant search style quries
 	
 	
-Example HTTP query: http://example.com/?collection=mycollection&count=10&fields=title|description&query=dogs  
+Example HTTP query: example.com/?collection=mycollection&count=10&fields=title|description&query=dogs  
 
 Demo on: http://tyleregeto.com
