@@ -368,6 +368,7 @@ func (s *SearchEngine) addToKgramIndex(doc Document) {
 func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []*hit {
 	lookup := map[int]*hit{}
 	hits := []*hit{}
+	termBonus := 100
 
 	for _, t := range tokens {
 		r := s.index.Get(t)
@@ -385,7 +386,9 @@ func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []*hit {
 		for _, doc := range r {
 			h, ok := lookup[doc.Doc]
 			if ok {
-				h.freq += doc.Frequency
+				// every additional term match gets a bonus. This means docs that match more
+				// of the requested terms sort higher.
+				h.freq += doc.Frequency + termBonus
 			} else {
 				h = &hit{doc: doc.Doc, freq: doc.Frequency}
 				hits = append(hits, h)
