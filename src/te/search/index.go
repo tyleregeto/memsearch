@@ -88,17 +88,12 @@ func (i *IndexTable) Remove(t Token, docid int) {
 	i.table[t] = row
 }
 
-func (i *IndexTable) Get(t Token) []int {
+func (i *IndexTable) Get(t Token) []IndexDoc {
 	row, ok := i.table[t]
 	if ok {
-		// TODO return docs, not just the ids
-		ids := make([]int, len(row.Docs))
-		for i, doc := range row.Docs {
-			ids[i] = doc.Doc
-		}
-		return ids
+		return row.Docs
 	}
-	return []int{}
+	return []IndexDoc{}
 }
 
 func (d *docSorter) Len() int {

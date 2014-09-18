@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -79,6 +80,15 @@ type (
 		}
 	*/
 
+	hit struct {
+		doc  int
+		freq int
+	}
+
+	hitSorter struct {
+		hits []*hit
+	}
+
 	// wrapper struct for exporting private fields to JSON
 	engineJsonExport struct {
 		ExternalToInternalId map[string]int
@@ -150,6 +160,7 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 	results.Page = query.Page
 	results.Hits = len(docs)
 
+	// get the requested page
 	start := (query.Page - 1) * query.PageSize
 	if start >= results.Hits {
 		return results
@@ -169,7 +180,7 @@ func (s *SearchEngine) Query(query Query) SearchResult {
 	}
 
 	for i := 0; i < count; i++ {
-		docid := docs[start+i]
+		docid := docs[start+i].doc
 		doc := s.documents[docid]
 		res := DocResult{Id: doc.Id, Fields: map[string]string{}}
 
@@ -199,9 +210,9 @@ func (s *SearchEngine) QueryField(field string, query string) SearchResult {
 	results.Page = 1
 	results.PageSize = DefaultPageSize
 
-	for _, docid := range docs {
-		d := s.documents[docid]
-		// We are basically ndexing per-field here, why not just make the indexing
+	for _, doc := range docs {
+		d := s.documents[doc.doc]
+		// We are basically indexing per-field here, why not just make the indexing
 		// global, and we can skip the initial `all` query. It will probably be smaller than
 		// what we are currently doing, lots of duplication now
 		f, ok := d.Fields[field]
@@ -212,10 +223,9 @@ func (s *SearchEngine) QueryField(field string, query string) SearchResult {
 		for _, t := range tokens {
 			_, ok := f.Tokens[t]
 			if ok {
-				doc := s.documents[docid]
-				res := DocResult{Id: doc.Id, Fields: map[string]string{}}
+				res := DocResult{Id: d.Id, Fields: map[string]string{}}
 
-				for k, v := range doc.Fields {
+				for k, v := range d.Fields {
 					res.Fields[k] = v.Value
 				}
 
@@ -355,33 +365,37 @@ func (s *SearchEngine) addToKgramIndex(doc Document) {
 }
 
 // returns a list of docids
-func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []int {
-	docs := []int{}
-	found := map[int]bool{}
+func (s *SearchEngine) _all(tokens []Token, partialMatches bool) []*hit {
+	lookup := map[int]*hit{}
+	hits := []*hit{}
 
 	for _, t := range tokens {
 		r := s.index.Get(t)
 
 		// If no results found on the exact term, and partial matching is enabled
 		// perform the partial matching
+		// TODO we should include partial matches here even if len(r) == 0, but weight them differently
 		if partialMatches && len(r) == 0 {
-			// TODO we should include partial matches here anyways, by weight them differently
-			r = s._all(s.kIndex.Get(t), false)
+			partialTokens := s.kIndex.Get(t)
+			for _, t := range partialTokens {
+				r = append(r, s.index.Get(t)...)
+			}
 		}
 
-		for _, docid := range r {
-			// remove duplicate ids
-			// TODO count the number of times a doc is returned for relevence ranking
-			if _, ok := found[docid]; !ok {
-				found[docid] = true
-				docs = append(docs, docid)
+		for _, doc := range r {
+			h, ok := lookup[doc.Doc]
+			if ok {
+				h.freq += doc.Frequency
+			} else {
+				h = &hit{doc: doc.Doc, freq: doc.Frequency}
+				hits = append(hits, h)
+				lookup[doc.Doc] = h
 			}
 		}
 	}
 
-	// TODO sort docs by relevence
-
-	return docs
+	sort.Sort(&hitSorter{hits})
+	return hits
 }
 
 func (s *SearchEngine) writeIndexToDisk() {
@@ -452,4 +466,16 @@ func (s *SearchEngine) readIndexFromDisk() {
 	s.index.nextIndex = savedIndex.NextIndex
 	s.index.table = savedIndex.Index
 	s.kIndex.table = savedIndex.KIndex
+}
+
+func (s *hitSorter) Len() int {
+	return len(s.hits)
+}
+
+func (s *hitSorter) Less(a int, b int) bool {
+	return s.hits[a].doc < s.hits[b].doc
+}
+
+func (s *hitSorter) Swap(a int, b int) {
+	s.hits[a], s.hits[b] = s.hits[b], s.hits[a]
 }

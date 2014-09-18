@@ -298,3 +298,28 @@ func TestPartialMatchingAfterStemming(t *testing.T) {
 		t.Errorf("Search failed, expected matches")
 	}
 }
+
+func TestRelevenceSorting(t *testing.T) {
+	s := NewSearchEngine()
+	s.SupportWildCardQuries = true
+
+	s.Index(Document{Id: "1", Fields: map[string]*Field{
+		"title": &Field{Value: "cat cat dog"},
+	},
+	})
+
+	s.Index(Document{Id: "2", Fields: map[string]*Field{
+		"title": &Field{Value: "dog dog cat"},
+	},
+	})
+
+	res := s.Query(Query{Terms: "cat", PartialMatch: true})
+	if res.Hits != 2 && res.Documents[0].Id == "1" {
+		t.Errorf("Search failed, expected 2 hits with doc 1 first, got: %v", res)
+	}
+
+	res = s.Query(Query{Terms: "dog", PartialMatch: true})
+	if res.Hits != 2 && res.Documents[0].Id == "2" {
+		t.Errorf("Search failed, expected 2 hits with doc 2 first, got: %v", res)
+	}
+}
